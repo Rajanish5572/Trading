@@ -10,6 +10,7 @@ Run with:  uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -62,10 +63,24 @@ def startup() -> None:
     settings = get_settings()
     mode = "PAPER" if settings.paper_mode else "LIVE"
     logger.info("Starting terminal in %s mode", mode)
-    try:
-        bridge.start()
-    except Exception:
-        logger.exception("Market data bridge failed to start -- check .env credentials")
+
+    # bridge.start() logs into Arrow and opens a websocket -- both are network
+    # calls with no guaranteed timeout inside pyarrow_client. If either hangs
+    # (bad credentials that the broker doesn't fail fast on, a firewall that
+    # silently drops packets instead of rejecting, IP mismatch, etc.), running
+    # this inline would block FastAPI's entire startup and the UI would never
+    # become reachable -- exactly what happened when this blocked instead of
+    # erroring. Running it on a background thread means the web server starts
+    # and the UI loads immediately regardless of whether Arrow ever connects;
+    # if it fails or hangs, you'll just see no live ticks until it's fixed,
+    # not a dead app.
+    def _start_bridge_in_background() -> None:
+        try:
+            bridge.start()
+        except Exception:
+            logger.exception("Market data bridge failed to start -- check .env credentials")
+
+    threading.Thread(target=_start_bridge_in_background, daemon=True, name="arrow-bridge-startup").start()
 
 
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
