@@ -69,12 +69,20 @@ class MarketDataBridge:
     def register_symbol(self, token: int, symbol: str) -> None:
         self._token_to_symbol[token] = symbol
 
-    def start(self) -> None:
-        """Call once from FastAPI's startup event."""
+    def start(self, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+        """
+        Call once from FastAPI's startup event. Runs on a background thread
+        (see main.py) so a slow/hung Arrow login can't block the app itself
+        from starting -- which means this thread has no event loop of its
+        own. `loop` must be the actual running asyncio loop (captured on the
+        main thread via asyncio.get_running_loop()) so ticks can be handed
+        back to it with run_coroutine_threadsafe. Without this, ticks would
+        have nowhere safe to go.
+        """
         if self._started:
             return
         self._started = True
-        self._loop = asyncio.get_event_loop()
+        self._loop = loop
 
         try:
             streams = get_arrow_client().streams()

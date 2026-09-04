@@ -9,6 +9,7 @@ Run with:  uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from pathlib import Path
@@ -59,7 +60,7 @@ async def ws_orders(websocket: WebSocket):
 
 
 @app.on_event("startup")
-def startup() -> None:
+async def startup() -> None:
     settings = get_settings()
     mode = "PAPER" if settings.paper_mode else "LIVE"
     logger.info("Starting terminal in %s mode", mode)
@@ -74,9 +75,17 @@ def startup() -> None:
     # and the UI loads immediately regardless of whether Arrow ever connects;
     # if it fails or hangs, you'll just see no live ticks until it's fixed,
     # not a dead app.
+    #
+    # The background thread has no event loop of its own, so we grab the
+    # real running loop here (this handler is `async def` specifically so
+    # asyncio.get_running_loop() is guaranteed to return the main loop, not
+    # None or a worker-thread loop) and hand it to the bridge to schedule
+    # tick broadcasts back onto safely via run_coroutine_threadsafe.
+    loop = asyncio.get_running_loop()
+
     def _start_bridge_in_background() -> None:
         try:
-            bridge.start()
+            bridge.start(loop=loop)
         except Exception:
             logger.exception("Market data bridge failed to start -- check .env credentials")
 
