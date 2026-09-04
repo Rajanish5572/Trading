@@ -1,0 +1,14 @@
+# secrets -- never commit these
+backend/.env
+backend/.arrow_token.json
+
+# local runtime data -- regenerable, not source
+backend/data/
+
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# editor/OS noise
+.DS_Store
