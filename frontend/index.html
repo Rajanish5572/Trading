@@ -28,20 +28,9 @@
 
   <section id="tab-chart" class="tabpanel active">
     <div class="chart-toolbar">
-      <select id="chartUnderlying">
-        <option value="NIFTY">NIFTY</option>
-        <option value="BANKNIFTY">BANKNIFTY</option>
-        <option value="FINNIFTY">FINNIFTY</option>
-        <option value="SENSEX">SENSEX</option>
-      </select>
-      <input id="chartToken" type="number" placeholder="Instrument token" style="width:130px" />
-      <select id="chartExchange" style="width:80px">
-        <option value="NSE">NSE</option>
-        <option value="NFO">NFO</option>
-        <option value="BSE">BSE</option>
-        <option value="BFO">BFO</option>
-        <option value="MCXFO">MCXFO</option>
-      </select>
+      <input id="chartSymbolSearch" placeholder="Search symbol e.g. RELIANCE, NIFTY" style="width:220px" />
+      <button id="chartSearchBtn">Search</button>
+      <select id="chartSymbolResults" style="width:260px"><option value="">no results yet</option></select>
       <select id="chartInterval">
         <option value="min">1 min</option>
         <option value="3min">3 min</option>

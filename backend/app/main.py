@@ -18,7 +18,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .routers import analytics, chart, option_chain, positions, strategy
+from .routers import analytics, chart, instruments, option_chain, positions, strategy
 from .ws_relay import bridge, manager
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +27,7 @@ logger = logging.getLogger("terminal.main")
 app = FastAPI(title="Trading Terminal")
 
 app.include_router(chart.router)
+app.include_router(instruments.router)
 app.include_router(option_chain.router)
 app.include_router(analytics.router)
 app.include_router(strategy.router)

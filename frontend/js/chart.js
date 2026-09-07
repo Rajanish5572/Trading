@@ -8,6 +8,7 @@ const ChartTab = (() => {
   const activeIndicators = new Set();
   let lastCandles = [];
   let currentSymbolMeta = null;
+  let searchResults = []; // populated by /api/instruments/search, indexed by <select> option value
 
   function makeChart(container) {
     return LightweightCharts.createChart(container, {
@@ -39,13 +40,37 @@ const ChartTab = (() => {
     macdHistSeries = macdChart.addHistogramSeries({ color: "#639922" });
 
     document.getElementById("chartLoadBtn").addEventListener("click", load);
+    document.getElementById("chartSearchBtn").addEventListener("click", searchSymbols);
+    document.getElementById("chartSymbolSearch").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); searchSymbols(); }
+    });
     document.querySelectorAll(".chip[data-ind]").forEach((btn) => {
       btn.addEventListener("click", () => toggleIndicator(btn));
     });
     document.getElementById("orderTicketForm").addEventListener("submit", submitOrder);
 
     TerminalWS.onMarket(onTick);
-    load();
+    document.getElementById("orderTicketResult").textContent = "Search for a symbol above, pick a result, then hit Load.";
+  }
+
+  async function searchSymbols() {
+    const q = document.getElementById("chartSymbolSearch").value.trim();
+    const select = document.getElementById("chartSymbolResults");
+    if (!q) return;
+    select.innerHTML = `<option value="">searching…</option>`;
+    try {
+      searchResults = await Api.get(`/api/instruments/search?q=${encodeURIComponent(q)}`);
+    } catch (e) {
+      select.innerHTML = `<option value="">search failed: ${e.message}</option>`;
+      return;
+    }
+    if (!searchResults.length) {
+      select.innerHTML = `<option value="">no matches</option>`;
+      return;
+    }
+    select.innerHTML = searchResults.map((r, i) =>
+      `<option value="${i}">${r.symbol} · ${r.exchange}${r.name ? " · " + r.name : ""}</option>`
+    ).join("");
   }
 
   function toggleIndicator(btn) {
@@ -78,14 +103,16 @@ const ChartTab = (() => {
   }
 
   async function load() {
-    const token = parseInt(document.getElementById("chartToken").value, 10);
-    const exchange = document.getElementById("chartExchange").value;
-    const symbol = document.getElementById("chartUnderlying").value;
-    const interval = document.getElementById("chartInterval").value;
-    if (!token) {
-      document.getElementById("orderTicketResult").textContent = "Enter an instrument token to load a chart.";
+    const selectedIdx = document.getElementById("chartSymbolResults").value;
+    if (selectedIdx === "" || !searchResults[selectedIdx]) {
+      document.getElementById("orderTicketResult").textContent = "Search for a symbol and pick a result first.";
       return;
     }
+    const instrument = searchResults[selectedIdx];
+    const token = instrument.token;
+    const exchange = instrument.exchange;
+    const symbol = instrument.symbol;
+    const interval = document.getElementById("chartInterval").value;
 
     const range = isoRangeFor(interval);
     const indicatorConfigs = [];
