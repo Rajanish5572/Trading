@@ -10,6 +10,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from ..arrow_client import get_arrow_client
+from ..leg_utils import normalize_legs
 
 logger = logging.getLogger("terminal.option_chain")
 router = APIRouter(prefix="/api/option-chain", tags=["option-chain"])
@@ -36,7 +37,9 @@ def list_indices():
 @router.get("")
 def get_chain(
     underlying: str = Query(...),
-    exchange: str = Query("NFO"),
+    exchange: str = Query("INDEX", description="Confirmed 'INDEX' works for major indices (NIFTY etc). "
+                                                 "Equity-underlying option chains haven't been verified yet -- "
+                                                 "may need 'NFO' instead, untested."),
     expiry: str = Query(...),
     count: int = Query(20, description="Strikes on each side of ATM"),
     spot: float | None = Query(None, description="Current spot, for ATM + PCR calc; fetched live if omitted"),
@@ -47,11 +50,15 @@ def get_chain(
         logger.exception("Option chain fetch failed")
         raise HTTPException(502, f"Could not fetch option chain: {exc}") from exc
 
+    legs = normalize_legs(legs)
+
     if spot is None:
         try:
-            from ..models import Exchange as _  # noqa: F401 -- keeps import graph honest
-
-            quote = get_arrow_client().get_quote("LTP", underlying, "NSE" if exchange == "NFO" else "BSE")
+            # Best-effort guess: index spot quotes are commonly served under
+            # NSE even when the option chain itself lives under "INDEX" --
+            # not independently confirmed the way the option chain call was.
+            quote_exchange = "NSE" if exchange in ("INDEX", "NFO") else "BSE"
+            quote = get_arrow_client().get_quote("LTP", underlying, quote_exchange)
             spot = quote.get("ltp")
         except Exception:
             logger.warning("Could not resolve live spot for ATM calc, falling back to nearest strike")

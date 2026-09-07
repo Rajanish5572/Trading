@@ -11,6 +11,7 @@ const OptionChainTab = (() => {
         <select id="ocUnderlying"></select>
         <select id="ocExpiry"></select>
         <select id="ocExchange" style="width:80px">
+          <option value="INDEX" selected>INDEX</option>
           <option value="NFO">NFO</option>
           <option value="BFO">BFO</option>
         </select>

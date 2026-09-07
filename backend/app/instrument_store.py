@@ -64,17 +64,30 @@ def _normalize(row: dict) -> Optional[dict]:
     exchange = _get(row, "exchange", "exch")
     if token is None or symbol is None or exchange is None:
         return None
+
+    def _cast(value, caster, default):
+        # Confirmed on a real option-chain response: Arrow returns every
+        # field as a string, even numeric ones -- same almost certainly
+        # applies to the instrument master. Cast defensively, never crash
+        # the whole download over one malformed row.
+        if value in (None, ""):
+            return default
+        try:
+            return caster(value)
+        except (TypeError, ValueError):
+            return default
+
     return {
-        "token": int(token),
+        "token": _cast(token, int, 0),
         "exchange": str(exchange),
         "symbol": str(symbol),
         "name": _get(row, "name", "companyName", "company_name") or "",
         "segment": _get(row, "segment") or "",
         "instrument_type": _get(row, "instrument_type", "instrumentType", "optionType") or "",
         "expiry": _get(row, "expiry", "expiryDate") or "",
-        "strike": _get(row, "strike", "strikePrice") or 0,
-        "lot_size": _get(row, "lot_size", "lotSize") or 1,
-        "tick_size": _get(row, "tick_size", "tickSize") or 0.05,
+        "strike": _cast(_get(row, "strike", "strikePrice"), float, 0.0),
+        "lot_size": _cast(_get(row, "lot_size", "lotSize"), int, 1),
+        "tick_size": _cast(_get(row, "tick_size", "tickSize"), float, 0.05),
     }
 
 

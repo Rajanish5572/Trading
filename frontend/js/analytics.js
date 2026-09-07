@@ -11,7 +11,7 @@ const AnalyticsTab = (() => {
       <div class="filter-row">
         <select id="anUnderlying"></select>
         <select id="anExpiry"></select>
-        <select id="anExchange" style="width:80px"><option value="NFO">NFO</option><option value="BFO">BFO</option></select>
+        <select id="anExchange" style="width:80px"><option value="INDEX" selected>INDEX</option><option value="NFO">NFO</option><option value="BFO">BFO</option></select>
         <input id="anCount" type="number" value="10" style="width:70px" title="Strikes each side of ATM" />
         <button id="anLoadBtn">Load OI buildup</button>
       </div>

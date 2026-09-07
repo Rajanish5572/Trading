@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Query
 from .. import history_store
 from ..arrow_client import get_arrow_client
 from ..iv_store import record_and_get_percentile
+from ..leg_utils import normalize_legs
 
 logger = logging.getLogger("terminal.analytics")
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -45,10 +46,21 @@ _INTERPRETATION = {
 }
 
 
+def _num(value, caster, default=0):
+    """Arrow's quote payloads follow the same string-for-everything pattern
+    confirmed on option chain legs -- cast defensively rather than assume."""
+    if value in (None, ""):
+        return default
+    try:
+        return caster(value)
+    except (TypeError, ValueError):
+        return default
+
+
 @router.get("/oi-buildup")
 def oi_buildup(
     underlying: str = Query(...),
-    exchange: str = Query("NFO"),
+    exchange: str = Query("INDEX", description="Confirmed 'INDEX' works for major indices; equity underlyings untested."),
     expiry: str = Query(...),
     count: int = Query(10, description="Strikes on each side of ATM to analyze"),
 ):
@@ -57,6 +69,7 @@ def oi_buildup(
         legs = client.get_option_chain(underlying, exchange, expiry, count)
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch option chain: {exc}") from exc
+    legs = normalize_legs(legs)
 
     rows = []
     for leg in legs:
@@ -66,9 +79,9 @@ def oi_buildup(
             logger.warning("Quote failed for %s, skipping", leg.get("symbol"))
             continue
 
-        ltp = quote.get("ltp") or quote.get("close") or 0
-        prev_close = quote.get("close") or ltp
-        current_oi = quote.get("oi") or 0
+        ltp = _num(quote.get("ltp"), float) or _num(quote.get("close"), float)
+        prev_close = _num(quote.get("close"), float) or ltp
+        current_oi = _num(quote.get("oi"), int)
         opening_oi = leg.get("openingOI") or 0
 
         price_change_pct = round(((ltp - prev_close) / prev_close) * 100, 2) if prev_close else 0.0
@@ -97,7 +110,7 @@ def oi_buildup(
 @router.get("/straddle")
 def straddle_chart(
     underlying: str = Query(...),
-    exchange: str = Query("NFO"),
+    exchange: str = Query("INDEX", description="Confirmed 'INDEX' works for major indices; equity underlyings untested."),
     expiry: str = Query(...),
     strike: float = Query(..., description="Strike to build the CE+PE straddle for -- pass the ATM strike"),
     interval: str = Query("5min"),
@@ -109,6 +122,7 @@ def straddle_chart(
         legs = client.get_option_chain(underlying, exchange, expiry, count=50)
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch option chain: {exc}") from exc
+    legs = normalize_legs(legs)
 
     ce = next((l for l in legs if l.get("strikePrice") == strike and l.get("optionType") == "CE"), None)
     pe = next((l for l in legs if l.get("strikePrice") == strike and l.get("optionType") == "PE"), None)
@@ -133,12 +147,12 @@ def straddle_chart(
 @router.get("/iv-percentile")
 def iv_percentile(
     underlying: str = Query(...),
-    exchange: str = Query("NFO"),
+    exchange: str = Query("INDEX", description="Confirmed 'INDEX' works for major indices; equity underlyings untested."),
     expiry: str = Query(...),
 ):
     client = get_arrow_client()
     try:
-        legs = client.get_option_chain(underlying, exchange, expiry, count=4)
+        legs = normalize_legs(client.get_option_chain(underlying, exchange, expiry, count=4))
         tokens = [l["token"] for l in legs]
         greeks = client.client().get_greeks(tokens)  # documented as possibly unavailable on some envs
     except Exception as exc:
