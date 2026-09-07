@@ -31,7 +31,11 @@ class ArrowClientWrapper:
         self.settings = get_settings()
         self._client = None
         self._streams = None
-        self._lock = threading.Lock()
+        # RLock, not Lock: streams() acquires this and then calls self.client(),
+        # which acquires it again on the same thread. A plain Lock deadlocks on
+        # that re-entry every time -- this was the actual cause of every
+        # "hangs forever, no error, no response" symptom we chased above.
+        self._lock = threading.RLock()
 
     # ------------------------------------------------------------------
     # Auth
